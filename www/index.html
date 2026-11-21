@@ -1,0 +1,509 @@
+<!doctype html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="theme-color" content="#0b2540">
+<title>Maillon — compteur de chaîne</title>
+<style>
+:root{--bg:#f4f7fa;--card:#fff;--ink:#0b2540;--mut:#5b6b7c;--line:#d5dde5;--acc:#0a6ebd;--accInk:#fff;--warn:#b42318;--ok:#1b7f4b}
+body.night{--bg:#000;--card:#110000;--ink:#ff4d4d;--mut:#b23a3a;--line:#4a0000;--acc:#a00000;--accInk:#ffdddd;--warn:#ff8080;--ok:#ff6666}
+*{box-sizing:border-box}
+[hidden]{display:none!important}
+html,body{margin:0;background:var(--bg);color:var(--ink);font:16px/1.4 system-ui,-apple-system,"Segoe UI",Roboto,sans-serif}
+#app{max-width:480px;margin:0 auto;min-height:100vh;padding:env(safe-area-inset-top) 12px calc(76px + env(safe-area-inset-bottom))}
+header{display:flex;justify-content:space-between;align-items:center;padding:12px 0}
+.brand{font-size:22px;font-weight:700}
+.brand small{display:block;font-size:12px;font-weight:400;color:var(--mut)}
+.chip{border:1px solid var(--line);background:var(--card);color:var(--ink);border-radius:999px;padding:8px 12px;font-size:14px}
+.card{background:var(--card);border:1px solid var(--line);border-radius:12px;padding:14px;margin-bottom:12px}
+.card h3{margin:0 0 6px;font-size:16px}
+.muted{color:var(--mut);font-size:14px}
+.hero{text-align:center}
+.big{font-size:72px;font-weight:700;line-height:1;margin:6px 0}
+.big .unit{font-size:28px;font-weight:400;margin-left:6px;color:var(--mut)}
+.dir{font-size:15px;color:var(--mut);min-height:22px}
+.warn{color:var(--warn)}
+.bar{position:relative;height:18px;border-radius:9px;background:var(--line);overflow:hidden;margin-top:12px}
+#fill{position:absolute;left:0;top:0;bottom:0;width:0;background:var(--acc)}
+.tick{position:absolute;top:0;bottom:0;width:2px;background:var(--bg);opacity:.8}
+#tgtMark{position:absolute;top:0;bottom:0;width:4px;background:var(--warn);display:none}
+.row2{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+.stat{text-align:center;margin-bottom:12px}
+.stat b{display:block;font-size:28px}
+.btn{display:block;width:100%;padding:14px;border:0;border-radius:10px;background:var(--acc);color:var(--accInk);font-size:16px;font-weight:600;margin-top:10px}
+.ghost{background:transparent;color:var(--ink);border:1px solid var(--line)}
+.field{display:flex;flex-direction:column;gap:4px;margin-top:10px}
+.field label{font-size:14px;color:var(--mut)}
+input[type=text],select{width:100%;padding:12px;border:1px solid var(--line);border-radius:10px;background:var(--bg);color:var(--ink);font-size:16px}
+.grid2{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+.inline{display:flex;gap:8px;align-items:flex-end}
+.inline .field{flex:1;margin-top:10px}
+.inline .btn{width:auto;margin-top:0;padding:12px 16px}
+.check{display:flex;gap:10px;align-items:center;margin-top:12px}
+.check input{width:22px;height:22px}
+.live{font-size:34px;font-weight:700;text-align:center;margin:10px 0}
+ol.steps{padding-left:20px;margin:6px 0;color:var(--mut);font-size:14px}
+ul.runs{list-style:none;padding:0;margin:6px 0;font-size:14px}
+ul.runs li{padding:6px 0;border-bottom:1px solid var(--line)}
+#alert{background:var(--warn);color:#fff;border-radius:10px;padding:12px;margin-bottom:12px;font-weight:600}
+#toast{position:fixed;left:12px;right:12px;bottom:calc(76px + env(safe-area-inset-bottom));max-width:456px;margin:0 auto;background:var(--ink);color:var(--bg);padding:12px;border-radius:10px;font-size:14px;z-index:5}
+nav{position:fixed;left:0;right:0;bottom:0;display:flex;background:var(--card);border-top:1px solid var(--line);padding-bottom:env(safe-area-inset-bottom);z-index:4}
+nav button{flex:1;padding:16px 0;border:0;background:transparent;color:var(--mut);font-size:15px;font-weight:600}
+nav button.on{color:var(--acc);box-shadow:inset 0 3px 0 var(--acc)}
+.err{color:var(--warn);font-size:14px;min-height:18px}
+</style>
+</head>
+<body>
+<div id="app">
+  <header>
+    <div class="brand">Maillon<small id="boatName">compteur de chaîne</small></div>
+    <button class="chip" id="chip">○ Déconnecté</button>
+  </header>
+  <div id="alert" hidden></div>
+
+  <section id="v-count">
+    <div class="card hero">
+      <div class="dir" id="dir">À l'arrêt</div>
+      <div class="big"><span id="len">—</span><span class="unit">m</span></div>
+      <div class="muted" id="sub"></div>
+      <div class="bar"><div id="fill"></div><div id="ticks"></div><div id="tgtMark"></div></div>
+    </div>
+    <div class="row2">
+      <div class="card stat"><span class="muted">Tours</span><b id="turns">0,0</b></div>
+      <div class="card stat"><span class="muted">Cible</span><b id="tgt">—</b></div>
+    </div>
+    <div class="card">
+      <h3>Longueur à filer</h3>
+      <div class="grid2">
+        <div class="field"><label for="depth">Profondeur (m)</label><input type="text" inputmode="decimal" id="depth"></div>
+        <div class="field"><label for="bow">Hauteur étrave (m)</label><input type="text" inputmode="decimal" id="bow"></div>
+      </div>
+      <div class="field"><label for="ratio">Rapport chaîne / hauteur</label>
+        <select id="ratio">
+          <option value="3">3 : 1 — rade abritée, beau temps</option>
+          <option value="4">4 : 1</option>
+          <option value="5">5 : 1 — standard</option>
+          <option value="7">7 : 1 — vent fort</option>
+          <option value="10">10 : 1 — tempête</option>
+        </select>
+      </div>
+      <p class="muted">Longueur à filer : <b id="calcOut">—</b></p>
+      <button class="btn" id="useTarget">Utiliser comme cible</button>
+      <button class="btn ghost" id="clearTarget">Supprimer la cible</button>
+    </div>
+    <div class="card">
+      <h3>Position de la chaîne</h3>
+      <button class="btn ghost" id="zero">Zéro : ancre à poste</button>
+      <div class="inline">
+        <div class="field"><label for="realLen">Recaler sur un repère (m)</label><input type="text" inputmode="decimal" id="realLen" placeholder="ex. 20"></div>
+        <button class="btn" id="recal">Recaler</button>
+      </div>
+    </div>
+    <div class="card" id="simBox" hidden>
+      <h3>Simulation</h3>
+      <div class="grid2"><button class="btn" id="simOut">Filer</button><button class="btn" id="simIn">Remonter</button></div>
+      <button class="btn ghost" id="simStop">Stop</button>
+    </div>
+  </section>
+
+  <section id="v-calib" hidden>
+    <div class="card hero">
+      <h3>Coefficient actuel</h3>
+      <div class="big" style="font-size:48px"><span id="cMpt">—</span><span class="unit">m / tour</span></div>
+      <div class="muted" id="cInfo"></div>
+    </div>
+    <div class="card">
+      <h3>Essai de calibrage</h3>
+      <ol class="steps">
+        <li>Chaîne tendue, repère un maillon devant le davier (ruban, marque).</li>
+        <li>Choisis le nombre de tours puis lance l'essai.</li>
+        <li>Fais tourner le guindeau jusqu'au signal d'arrêt.</li>
+        <li>Mesure la chaîne sortie et saisis la valeur.</li>
+      </ol>
+      <div class="field"><label for="calN">Nombre de tours de l'essai</label><input type="text" inputmode="decimal" id="calN" value="10"></div>
+      <div class="live"><span id="calTurns">0,0</span> <span class="muted">/ <span id="calTarget">10</span> tours</span></div>
+      <div class="err" id="calNote"></div>
+      <button class="btn" id="calStart">Lancer l'essai</button>
+      <div id="calMeasure" hidden>
+        <div class="grid2">
+          <div class="field"><label for="calTurnsIn">Tours effectués</label><input type="text" inputmode="decimal" id="calTurnsIn"></div>
+          <div class="field"><label for="calMeters">Chaîne sortie (m)</label><input type="text" inputmode="decimal" id="calMeters"></div>
+        </div>
+        <div class="err" id="calErr"></div>
+        <button class="btn" id="calSave">Enregistrer l'essai</button>
+        <button class="btn ghost" id="calCancel">Annuler</button>
+      </div>
+    </div>
+    <div class="card">
+      <h3>Essais enregistrés</h3>
+      <ul class="runs" id="runs"></ul>
+      <p class="muted">Le coefficient est la moyenne pondérée de tous les essais : plus il y en a, plus il est précis.</p>
+      <button class="btn ghost" id="runsClear">Effacer les essais</button>
+    </div>
+    <div class="card">
+      <h3>Saisie manuelle</h3>
+      <div class="inline">
+        <div class="field"><label for="manMpt">Mètres par tour</label><input type="text" inputmode="decimal" id="manMpt" placeholder="ex. 0,118"></div>
+        <button class="btn" id="manSave">Valider</button>
+      </div>
+    </div>
+  </section>
+
+  <section id="v-set" hidden>
+    <div class="card">
+      <h3>Profil bateau</h3>
+      <div class="field"><label for="pSel">Profil actif</label><select id="pSel"></select></div>
+      <div class="field"><label for="pName">Nom</label><input type="text" id="pName"></div>
+      <div class="grid2">
+        <div class="field"><label for="pPpr">Impulsions par tour</label><input type="text" inputmode="decimal" id="pPpr"></div>
+        <div class="field"><label for="pChain">Chaîne totale (m)</label><input type="text" inputmode="decimal" id="pChain"></div>
+      </div>
+      <label class="check"><input type="checkbox" id="pInvert"> Inverser le sens de comptage</label>
+      <div class="grid2"><button class="btn" id="pNew">Nouveau profil</button><button class="btn ghost" id="pDel">Supprimer</button></div>
+    </div>
+    <div class="card">
+      <h3>Capteur</h3>
+      <p class="muted" id="linkInfo">Non connecté.</p>
+      <button class="btn" id="btnConnect">Connecter le capteur</button>
+      <button class="btn ghost" id="btnSim">Mode simulation</button>
+    </div>
+    <div class="card">
+      <h3>Affichage</h3>
+      <label class="check"><input type="checkbox" id="night"> Mode nuit (rouge sur noir)</label>
+    </div>
+  </section>
+</div>
+<div id="toast" hidden></div>
+<nav>
+  <button data-v="v-count" class="on">Compteur</button>
+  <button data-v="v-calib">Calibrage</button>
+  <button data-v="v-set">Réglages</button>
+</nav>
+
+<script src="ble.bundle.js"></script>
+<script>
+(function () {
+'use strict';
+
+var SERVICE = '6d61696c-6c6f-6e00-0001-000000000000';
+var CH_COUNT = '6d61696c-6c6f-6e00-0002-000000000000';
+var KEY = 'maillon.v1';
+
+function $(id) { return document.getElementById(id); }
+function fmt(n, d) {
+  if (d === undefined) d = 1;
+  if (n === null || n === undefined || !isFinite(n)) return '—';
+  return Number(n).toLocaleString('fr-FR', { minimumFractionDigits: d, maximumFractionDigits: d });
+}
+function num(el) {
+  var v = parseFloat(String(el.value).replace(',', '.'));
+  return isFinite(v) ? v : NaN;
+}
+
+function newProfile(name) {
+  return {
+    id: 'p' + Date.now().toString(36) + Math.random().toString(36).slice(2, 5),
+    name: name || 'Mon bateau', ppr: 4, chainTotal: 50, bowHeight: 1.5, invert: false,
+    mPerTurn: null, runs: [], pulses: 0, offset: 0, epoch: null, lastCount: null,
+    target: null, depth: 5, ratio: 5
+  };
+}
+function load() {
+  try {
+    var r = JSON.parse(localStorage.getItem(KEY));
+    if (r && r.profiles && r.profiles.length) {
+      if (!r.profiles.some(function (p) { return p.id === r.current; })) r.current = r.profiles[0].id;
+      return r;
+    }
+  } catch (e) {}
+  var p = newProfile('Mon bateau');
+  return { profiles: [p], current: p.id, night: false };
+}
+var S = load();
+function save() { try { localStorage.setItem(KEY, JSON.stringify(S)); } catch (e) {} }
+function P() { return S.profiles.filter(function (p) { return p.id === S.current; })[0] || S.profiles[0]; }
+
+function turns(p) { return (p.invert ? -1 : 1) * p.pulses / p.ppr; }
+function length(p) { return p.mPerTurn ? turns(p) * p.mPerTurn + p.offset : null; }
+function recalcCoef(p) {
+  var T = 0, M = 0;
+  p.runs.forEach(function (r) { T += r.turns; M += r.meters; });
+  p.mPerTurn = T > 0 ? M / T : null;
+}
+function targetFromCalc(p) { return (p.depth + p.bowHeight) * p.ratio; }
+
+var link = null, sim = null, armed = false, lastMoveAt = 0, lastDir = 0, toastT = null;
+var cal = { state: 'idle', start: 0, n: 10, notified: false };
+
+function toast(msg) {
+  var t = $('toast'); t.textContent = msg; t.hidden = false;
+  clearTimeout(toastT); toastT = setTimeout(function () { t.hidden = true; }, 4000);
+}
+function beep() {
+  try {
+    var A = window.AudioContext || window.webkitAudioContext;
+    var a = new A(), o = a.createOscillator(), g = a.createGain();
+    o.frequency.value = 880; g.gain.value = 0.2; o.connect(g); g.connect(a.destination); o.start();
+    setTimeout(function () { o.stop(); a.close(); }, 450);
+  } catch (e) {}
+  if (navigator.vibrate) navigator.vibrate([200, 100, 200]);
+}
+function fireAlert(msg) {
+  var a = $('alert'); a.textContent = msg; a.hidden = false; beep();
+}
+$('alert').addEventListener('click', function () { this.hidden = true; });
+
+function liveTurns() { var p = P(); return Math.abs(p.pulses - cal.start) / p.ppr; }
+
+function onSample(count, epoch) {
+  var p = P(), delta = 0;
+  if (p.epoch !== epoch || p.lastCount === null) {
+    if (p.epoch !== null && p.epoch !== epoch) toast('Capteur redémarré : vérifie la longueur et recale-la si besoin.');
+    p.epoch = epoch; p.lastCount = count;
+  } else {
+    delta = (count - p.lastCount) | 0;
+    p.lastCount = count; p.pulses += delta;
+  }
+  if (delta) { lastDir = (delta > 0 ? 1 : -1) * (p.invert ? -1 : 1); lastMoveAt = Date.now(); }
+  save(); checkTarget(); checkCal(); update();
+}
+function checkTarget() {
+  var p = P(), L = length(p);
+  if (L === null || !p.target) { armed = false; return; }
+  if (L < p.target - 0.5) armed = true;
+  else if (armed && L >= p.target) { armed = false; fireAlert('Longueur cible atteinte : ' + fmt(p.target) + ' m. Stop guindeau.'); }
+}
+function checkCal() {
+  if (cal.state === 'run' && !cal.notified && liveTurns() >= cal.n) {
+    cal.notified = true; fireAlert('Stop ! ' + fmt(cal.n, 0) + ' tours atteints.');
+  }
+}
+
+function handleBytes(v) {
+  var u8;
+  if (typeof v === 'string') {
+    var m = v.match(/.{1,2}/g) || [];
+    u8 = new Uint8Array(m.map(function (b) { return parseInt(b, 16); }));
+  } else if (v && v.buffer) {
+    u8 = new Uint8Array(v.buffer, v.byteOffset || 0, v.byteLength);
+  } else return;
+  if (u8.length < 6) return;
+  var dv = new DataView(u8.buffer, u8.byteOffset, u8.byteLength);
+  onSample(dv.getInt32(0, true), dv.getUint16(4, true));
+}
+
+function setLink(on, mode) {
+  var chip = $('chip');
+  if (!on) { chip.textContent = '○ Déconnecté'; $('linkInfo').textContent = 'Non connecté.'; $('btnConnect').textContent = 'Connecter le capteur'; $('simBox').hidden = true; link = null; return; }
+  chip.textContent = mode === 'sim' ? '● Simulation' : '● Capteur connecté';
+  $('linkInfo').textContent = mode === 'sim' ? 'Mode simulation actif (aucun capteur).' : 'Capteur connecté en Bluetooth (' + (mode === 'ble' ? 'natif' : 'web') + ').';
+  $('btnConnect').textContent = 'Déconnecter';
+  $('simBox').hidden = mode !== 'sim';
+}
+function stopLink() {
+  if (link && link.close) { try { link.close(); } catch (e) {} }
+  link = null; setLink(false);
+}
+
+async function connectNative(BLE) {
+  await BLE.initialize({ androidNeverForLocation: true });
+  var dev = await BLE.requestDevice({ services: [SERVICE], namePrefix: 'Maillon' });
+  var id = dev.deviceId;
+  await BLE.addListener('disconnected|' + id, function () { setLink(false); toast('Capteur déconnecté.'); });
+  await BLE.connect({ deviceId: id });
+  await BLE.addListener('notification|' + id + '|' + SERVICE + '|' + CH_COUNT, function (ev) { handleBytes(ev.value); });
+  await BLE.startNotifications({ deviceId: id, service: SERVICE, characteristic: CH_COUNT });
+  var r = await BLE.read({ deviceId: id, service: SERVICE, characteristic: CH_COUNT });
+  link = { mode: 'ble', close: function () { return BLE.disconnect({ deviceId: id }); } };
+  setLink(true, 'ble');
+  handleBytes(r.value);
+}
+async function connectWeb() {
+  var d = await navigator.bluetooth.requestDevice({ filters: [{ namePrefix: 'Maillon' }], optionalServices: [SERVICE] });
+  d.addEventListener('gattserverdisconnected', function () { setLink(false); toast('Capteur déconnecté.'); });
+  var srv = await d.gatt.connect();
+  var svc = await srv.getPrimaryService(SERVICE);
+  var ch = await svc.getCharacteristic(CH_COUNT);
+  ch.addEventListener('characteristicvaluechanged', function (e) { handleBytes(e.target.value); });
+  await ch.startNotifications();
+  link = { mode: 'web', close: function () { d.gatt.disconnect(); } };
+  setLink(true, 'web');
+  handleBytes(await ch.readValue());
+}
+function startSim() {
+  stopLink();
+  sim = { count: 0, dir: 0, acc: 0 };
+  var timer = setInterval(function () {
+    if (!sim || !sim.dir) return;
+    sim.acc += sim.dir * P().ppr * 0.8 * 0.2;
+    var whole = Math.trunc(sim.acc);
+    if (whole) { sim.acc -= whole; sim.count += whole; onSample(sim.count, 1); }
+  }, 200);
+  link = { mode: 'sim', close: function () { clearInterval(timer); sim = null; } };
+  setLink(true, 'sim');
+  onSample(0, 1);
+}
+async function connectBleClient(BC) {
+  await BC.initialize({ androidNeverForLocation: true });
+  var dev = await BC.requestDevice({ services: [SERVICE], namePrefix: 'Maillon' });
+  var id = dev.deviceId;
+  await BC.connect(id, function () { setLink(false); toast('Capteur déconnecté.'); });
+  await BC.startNotifications(id, SERVICE, CH_COUNT, function (v) { handleBytes(v); });
+  var r = await BC.read(id, SERVICE, CH_COUNT);
+  link = { mode: 'ble', close: function () { return BC.disconnect(id); } };
+  setLink(true, 'ble');
+  handleBytes(r);
+}
+async function connect() {
+  var BC = window.BleClient;
+  var BLE = window.Capacitor && window.Capacitor.Plugins && window.Capacitor.Plugins.BluetoothLe;
+  try {
+    if (BC) await connectBleClient(BC);
+    else if (BLE) await connectNative(BLE);
+    else if (navigator.bluetooth) await connectWeb();
+    else if (confirm('Bluetooth indisponible ici. Lancer le mode simulation ?')) startSim();
+  } catch (e) { toast('Connexion impossible : ' + ((e && e.message) || e)); }
+}
+function toggleLink() { if (link) stopLink(); else connect(); }
+
+var ticksKey = '';
+function buildTicks(total) {
+  var step = total <= 30 ? 5 : 10, key = total + '/' + step;
+  if (key === ticksKey) return;
+  ticksKey = key;
+  var h = '';
+  for (var m = step; m < total; m += step) h += '<div class="tick" style="left:' + (m / total * 100) + '%"></div>';
+  $('ticks').innerHTML = h;
+}
+
+function update() {
+  var p = P(), L = length(p), t = turns(p);
+  $('boatName').textContent = p.name;
+  $('turns').textContent = fmt(t, 1);
+  if (L === null) {
+    $('len').textContent = '—';
+    $('sub').textContent = 'Non calibré : va dans Calibrage.'; $('sub').className = 'muted';
+  } else {
+    $('len').textContent = fmt(Math.max(L, 0), 1);
+    if (L > p.chainTotal) { $('sub').textContent = 'Au-delà de la chaîne déclarée (' + fmt(p.chainTotal, 0) + ' m) !'; $('sub').className = 'warn'; }
+    else { $('sub').textContent = 'sur ' + fmt(p.chainTotal, 0) + ' m de chaîne'; $('sub').className = 'muted'; }
+  }
+  buildTicks(p.chainTotal);
+  $('fill').style.width = (L === null ? 0 : Math.max(0, Math.min(100, L / p.chainTotal * 100))) + '%';
+  var tm = $('tgtMark');
+  if (p.target) { tm.style.display = 'block'; tm.style.left = Math.min(100, p.target / p.chainTotal * 100) + '%'; $('tgt').textContent = fmt(p.target, 1) + ' m'; }
+  else { tm.style.display = 'none'; $('tgt').textContent = '—'; }
+  var moving = Date.now() - lastMoveAt < 1500;
+  $('dir').textContent = moving ? (lastDir > 0 ? 'Filage ↓' : 'Remontée ↑') : 'À l\'arrêt';
+  $('calcOut').textContent = fmt(targetFromCalc(p), 1) + ' m';
+
+  $('cMpt').textContent = p.mPerTurn ? fmt(p.mPerTurn, 3) : '—';
+  $('cInfo').textContent = p.runs.length ? p.runs.length + ' essai(s) enregistré(s)' : (p.mPerTurn ? 'Valeur saisie manuellement' : 'Aucun essai : lance un calibrage.');
+  $('calTarget').textContent = fmt(cal.n, 0);
+  if (cal.state === 'run') $('calTurns').textContent = fmt(liveTurns(), 2);
+  $('runs').innerHTML = p.runs.map(function (r) {
+    return '<li>' + fmt(r.turns, 2) + ' tours → ' + fmt(r.meters, 2) + ' m <span class="muted">(' + fmt(r.meters / r.turns, 3) + ' m/tour)</span></li>';
+  }).join('') || '<li class="muted">Aucun essai.</li>';
+  $('calStart').hidden = cal.state === 'measure';
+  $('calStart').textContent = cal.state === 'run' ? 'Terminer l\'essai' : 'Lancer l\'essai';
+  $('calMeasure').hidden = cal.state !== 'measure';
+  $('calNote').textContent = (cal.state === 'run' && !link) ? 'Capteur non connecté : tu pourras saisir les tours à la main.' : '';
+}
+
+function loadInputs() {
+  var p = P();
+  $('pSel').innerHTML = S.profiles.map(function (q) { return '<option value="' + q.id + '"' + (q.id === p.id ? ' selected' : '') + '>' + q.name.replace(/</g, '&lt;') + '</option>'; }).join('');
+  $('pName').value = p.name; $('pPpr').value = p.ppr; $('pChain').value = p.chainTotal; $('pInvert').checked = p.invert;
+  $('depth').value = p.depth; $('bow').value = p.bowHeight; $('ratio').value = String(p.ratio);
+  $('night').checked = !!S.night; document.body.classList.toggle('night', !!S.night);
+}
+function bindNum(id, key, min) {
+  $(id).addEventListener('input', function () {
+    var v = num(this); if (!isFinite(v) || v < min) return;
+    P()[key] = v; save(); update();
+  });
+}
+bindNum('depth', 'depth', 0); bindNum('bow', 'bowHeight', 0);
+bindNum('pPpr', 'ppr', 1); bindNum('pChain', 'chainTotal', 1);
+$('ratio').addEventListener('change', function () { P().ratio = parseFloat(this.value); save(); update(); });
+$('pName').addEventListener('input', function () { P().name = this.value || 'Sans nom'; save(); update(); });
+$('pName').addEventListener('change', loadInputs);
+$('pInvert').addEventListener('change', function () { P().invert = this.checked; save(); update(); });
+$('night').addEventListener('change', function () { S.night = this.checked; save(); document.body.classList.toggle('night', S.night); });
+$('pSel').addEventListener('change', function () { S.current = this.value; save(); armed = false; cal.state = 'idle'; loadInputs(); update(); });
+$('pNew').addEventListener('click', function () {
+  var p = newProfile('Bateau ' + (S.profiles.length + 1)); S.profiles.push(p); S.current = p.id; save(); loadInputs(); update(); $('pName').focus();
+});
+$('pDel').addEventListener('click', function () {
+  if (S.profiles.length < 2) { toast('Il faut garder au moins un profil.'); return; }
+  if (!confirm('Supprimer le profil « ' + P().name + ' » ?')) return;
+  S.profiles = S.profiles.filter(function (q) { return q.id !== S.current; }); S.current = S.profiles[0].id; save(); loadInputs(); update();
+});
+
+$('useTarget').addEventListener('click', function () { var p = P(); p.target = targetFromCalc(p); armed = false; save(); checkTarget(); update(); });
+$('clearTarget').addEventListener('click', function () { P().target = null; $('alert').hidden = true; save(); update(); });
+$('zero').addEventListener('click', function () {
+  if (!confirm('Remettre la longueur à zéro (ancre à poste) ?')) return;
+  var p = P(); p.pulses = 0; p.offset = 0; armed = false; save(); update();
+});
+$('recal').addEventListener('click', function () {
+  var p = P(), real = num($('realLen'));
+  if (!isFinite(real)) { toast('Saisis la longueur lue sur le repère.'); return; }
+  if (!p.mPerTurn) { toast('Calibre d\'abord le coefficient.'); return; }
+  p.offset = real - turns(p) * p.mPerTurn; $('realLen').value = ''; save(); update(); toast('Longueur recalée sur ' + fmt(real) + ' m.');
+});
+
+$('simOut').addEventListener('click', function () { if (sim) sim.dir = 1; });
+$('simIn').addEventListener('click', function () { if (sim) sim.dir = -1; });
+$('simStop').addEventListener('click', function () { if (sim) sim.dir = 0; });
+$('chip').addEventListener('click', toggleLink);
+$('btnConnect').addEventListener('click', toggleLink);
+$('btnSim').addEventListener('click', startSim);
+
+$('calStart').addEventListener('click', function () {
+  var p = P();
+  if (cal.state === 'idle') {
+    var n = num($('calN'));
+    if (!isFinite(n) || n < 1) { $('calNote').textContent = 'Nombre de tours invalide.'; return; }
+    cal.n = n; cal.start = p.pulses; cal.notified = false; cal.state = 'run'; $('calTurns').textContent = '0,00';
+  } else if (cal.state === 'run') {
+    var done = liveTurns(); cal.state = 'measure';
+    $('calTurnsIn').value = (Math.round(done * 100) / 100).toString().replace('.', ',');
+    $('calMeters').value = ''; $('calErr').textContent = ''; $('alert').hidden = true;
+  }
+  update();
+});
+$('calCancel').addEventListener('click', function () { cal.state = 'idle'; $('calTurns').textContent = '0,0'; update(); });
+$('calSave').addEventListener('click', function () {
+  var p = P(), t = num($('calTurnsIn')), m = num($('calMeters'));
+  if (!(t > 0) || !(m > 0)) { $('calErr').textContent = 'Renseigne les tours et la chaîne sortie (valeurs positives).'; return; }
+  p.runs.push({ turns: t, meters: m, date: Date.now() });
+  recalcCoef(p); cal.state = 'idle'; $('calTurns').textContent = '0,0'; save(); update();
+  toast('Essai enregistré : ' + fmt(p.mPerTurn, 3) + ' m/tour. Remets le zéro quand l\'ancre est à poste.');
+});
+$('runsClear').addEventListener('click', function () {
+  if (!confirm('Effacer tous les essais et le coefficient ?')) return;
+  var p = P(); p.runs = []; p.mPerTurn = null; save(); update();
+});
+$('manSave').addEventListener('click', function () {
+  var v = num($('manMpt'));
+  if (!(v > 0)) { toast('Valeur invalide.'); return; }
+  var p = P(); p.runs = []; p.mPerTurn = v; $('manMpt').value = ''; save(); update(); toast('Coefficient : ' + fmt(v, 3) + ' m/tour.');
+});
+
+Array.prototype.forEach.call(document.querySelectorAll('nav button'), function (b) {
+  b.addEventListener('click', function () {
+    Array.prototype.forEach.call(document.querySelectorAll('nav button'), function (x) { x.classList.toggle('on', x === b); });
+    ['v-count', 'v-calib', 'v-set'].forEach(function (id) { $(id).hidden = id !== b.getAttribute('data-v'); });
+    window.scrollTo(0, 0);
+  });
+});
+
+loadInputs(); update();
+setInterval(update, 500);
+window.__maillon = { onSample: onSample, state: function () { return S; }, cal: cal };
+})();
+</script>
+</body>
+</html>
