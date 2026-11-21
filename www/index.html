@@ -52,6 +52,17 @@ nav{position:fixed;left:0;right:0;bottom:0;display:flex;background:var(--card);b
 nav button{flex:1;padding:16px 0;border:0;background:transparent;color:var(--mut);font-size:15px;font-weight:600}
 nav button.on{color:var(--acc);box-shadow:inset 0 3px 0 var(--acc)}
 .err{color:var(--warn);font-size:14px;min-height:18px}
+.kv{display:flex;justify-content:space-between;gap:12px;padding:6px 0;border-bottom:1px solid var(--line);font-size:14px}
+.kv b{font-variant-numeric:tabular-nums;text-align:right}
+.verdict{margin-top:10px;font-weight:600}
+.verdict.ok{color:var(--ok)}.verdict.ko{color:var(--warn)}
+.dot{display:inline-block;width:14px;height:14px;border-radius:50%;background:var(--line);vertical-align:-2px;margin-right:6px}
+.dot.on{background:var(--ok)}
+.hit{color:var(--ok)}
+pre.log{margin:6px 0 0;font:12px/1.5 ui-monospace,Consolas,monospace;white-space:pre-wrap;color:var(--mut)}
+details{margin:0}
+details summary{font-weight:600;font-size:16px}
+details p,details ol{font-size:14px;color:var(--mut);margin:8px 0}
 </style>
 </head>
 <body>
@@ -104,6 +115,72 @@ nav button.on{color:var(--acc);box-shadow:inset 0 3px 0 var(--acc)}
       <h3>Simulation</h3>
       <div class="grid2"><button class="btn" id="simOut">Filer</button><button class="btn" id="simIn">Remonter</button></div>
       <button class="btn ghost" id="simStop">Stop</button>
+    </div>
+  </section>
+
+  <section id="v-test" hidden>
+    <div class="card">
+      <details>
+        <summary>Comment le comptage est fait</summary>
+        <ol>
+          <li>Les aimants fixés sur la partie tournante passent devant le capteur Hall : à chaque passage il produit <b>une impulsion</b>.</li>
+          <li>L'ESP32 compte ces impulsions (total cumulé, mémorisé dans le boîtier) et envoie le total en Bluetooth <b>uniquement quand il change</b>.</li>
+          <li>L'appli reçoit le total, en déduit les <b>tours</b> : impulsions ÷ « impulsions par tour » (= nombre d'aimants).</li>
+          <li>Longueur = tours × <b>mètres par tour</b> (coefficient du Calibrage) + recalage éventuel.</li>
+        </ol>
+        <p>Avec un seul capteur, le sens n'est pas détecté : la longueur monte aussi à la remontée. Avec deux capteurs décalés, le sens est détecté et la longueur redescend.</p>
+      </details>
+    </div>
+
+    <div class="card">
+      <h3>1 · Liaison avec le capteur</h3>
+      <div class="kv"><span>État</span><b><span class="dot" id="tDot"></span><span id="tLink">Non connecté</span></b></div>
+      <div class="kv"><span>Dernier paquet reçu</span><b id="tAge">—</b></div>
+      <div class="kv"><span>Paquets reçus</span><b id="tPk">0</b></div>
+      <div class="kv"><span>Compteur brut du boîtier</span><b id="tRaw">—</b></div>
+      <div class="kv"><span>Session du boîtier</span><b id="tEp">—</b></div>
+      <div class="verdict" id="tLinkV"></div>
+      <button class="btn" id="tConnect">Connecter le capteur</button>
+      <button class="btn ghost" id="tSim">Mode simulation</button>
+      <div id="tSimBox" hidden>
+        <div class="grid2"><button class="btn" id="tSimOut">Filer</button><button class="btn" id="tSimIn">Remonter</button></div>
+        <button class="btn ghost" id="tSimStop">Stop</button>
+      </div>
+      <p class="muted">Le boîtier n'envoie rien tant que rien ne bouge : un « dernier paquet » ancien est normal.</p>
+    </div>
+
+    <div class="card">
+      <h3>2 · Test du capteur (aimant)</h3>
+      <p class="muted">Passe un aimant devant le capteur (2 à 3 mm) ou tourne le barbotin. Chaque passage doit ajouter une impulsion.</p>
+      <div class="live"><span id="tCnt">0</span> <span class="muted">impulsion(s)</span></div>
+      <div class="verdict" id="tSensV"></div>
+      <p class="muted">Rien ne bouge ? Tourne la vis du module HW-484 jusqu'à ce que sa LED L2 change d'état quand l'aimant passe, vérifie les fils (+, G, D0) et la polarité de l'aimant.</p>
+      <button class="btn ghost" id="tReset">Remettre à zéro</button>
+    </div>
+
+    <div class="card">
+      <h3>3 · Sens de rotation</h3>
+      <p class="muted">Remets à zéro, puis tourne dans le sens du <b>filage</b> (chaîne qui sort).</p>
+      <div class="kv"><span>Impulsions « + »</span><b id="tPos">0</b></div>
+      <div class="kv"><span>Impulsions « − »</span><b id="tNeg">0</b></div>
+      <div class="verdict" id="tDirV"></div>
+      <button class="btn" id="tInvert" hidden>Inverser le sens de comptage</button>
+      <p class="muted">Puis tourne dans l'autre sens : si les « − » augmentent, tu as bien deux capteurs. Sinon, un seul capteur : normal, le sens n'est pas détecté.</p>
+    </div>
+
+    <div class="card">
+      <h3>4 · Impulsions par tour</h3>
+      <p class="muted">Fais un nombre de tours exact (le plus simple : 1 tour), sans reculer.</p>
+      <div class="field"><label for="tPprN">Nombre de tours que tu vas faire</label><input type="text" inputmode="decimal" id="tPprN" value="1"></div>
+      <div class="live"><span id="tPprCnt">0</span> <span class="muted">impulsion(s)</span></div>
+      <div class="verdict" id="tPprV"></div>
+      <button class="btn" id="tPprStart">Démarrer la mesure</button>
+      <button class="btn" id="tPprUse" hidden>Utiliser cette valeur</button>
+    </div>
+
+    <div class="card">
+      <h3>Journal des paquets</h3>
+      <pre class="log" id="tLog">Aucun paquet reçu.</pre>
     </div>
   </section>
 
@@ -177,6 +254,7 @@ nav button.on{color:var(--acc);box-shadow:inset 0 3px 0 var(--acc)}
 <div id="toast" hidden></div>
 <nav>
   <button data-v="v-count" class="on">Compteur</button>
+  <button data-v="v-test">Test</button>
   <button data-v="v-calib">Calibrage</button>
   <button data-v="v-set">Réglages</button>
 </nav>
@@ -235,6 +313,9 @@ function targetFromCalc(p) { return (p.depth + p.bowHeight) * p.ratio; }
 
 var link = null, sim = null, armed = false, lastMoveAt = 0, lastDir = 0, toastT = null;
 var cal = { state: 'idle', start: 0, n: 10, notified: false };
+var diag = { packets: 0, lastAt: 0, count: null, epoch: null, log: [] };
+var T = { pos: 0, neg: 0, flashAt: 0 };
+var pr = { state: 'idle', pos: 0, neg: 0, n: 1, result: null };
 
 function toast(msg) {
   var t = $('toast'); t.textContent = msg; t.hidden = false;
@@ -257,6 +338,12 @@ $('alert').addEventListener('click', function () { this.hidden = true; });
 function liveTurns() { var p = P(); return Math.abs(p.pulses - cal.start) / p.ppr; }
 
 function onSample(count, epoch) {
+  var d = (diag.count === null || diag.epoch !== epoch) ? 0 : ((count - diag.count) | 0);
+  diag.count = count; diag.epoch = epoch; diag.packets++; diag.lastAt = Date.now();
+  diag.log.unshift({ t: Date.now(), count: count, epoch: epoch, d: d }); if (diag.log.length > 15) diag.log.pop();
+  if (d > 0) T.pos += d; else if (d < 0) T.neg -= d;
+  if (d) { T.flashAt = Date.now(); setTimeout(updateTest, 450); }
+  if (pr.state === 'run') { if (d > 0) pr.pos += d; else if (d < 0) pr.neg -= d; }
   var p = P(), delta = 0;
   if (p.epoch !== epoch || p.lastCount === null) {
     if (p.epoch !== null && p.epoch !== epoch) toast('Capteur redémarré : vérifie la longueur et recale-la si besoin.');
@@ -295,11 +382,11 @@ function handleBytes(v) {
 
 function setLink(on, mode) {
   var chip = $('chip');
-  if (!on) { chip.textContent = '○ Déconnecté'; $('linkInfo').textContent = 'Non connecté.'; $('btnConnect').textContent = 'Connecter le capteur'; $('simBox').hidden = true; link = null; return; }
+  if (!on) { chip.textContent = '○ Déconnecté'; $('linkInfo').textContent = 'Non connecté.'; $('btnConnect').textContent = 'Connecter le capteur'; $('simBox').hidden = true; $('tSimBox').hidden = true; diag.count = null; link = null; update(); return; }
   chip.textContent = mode === 'sim' ? '● Simulation' : '● Capteur connecté';
   $('linkInfo').textContent = mode === 'sim' ? 'Mode simulation actif (aucun capteur).' : 'Capteur connecté en Bluetooth (' + (mode === 'ble' ? 'natif' : 'web') + ').';
   $('btnConnect').textContent = 'Déconnecter';
-  $('simBox').hidden = mode !== 'sim';
+  $('simBox').hidden = mode !== 'sim'; $('tSimBox').hidden = mode !== 'sim'; update();
 }
 function stopLink() {
   if (link && link.close) { try { link.close(); } catch (e) {} }
@@ -409,6 +496,54 @@ function update() {
   $('calStart').textContent = cal.state === 'run' ? 'Terminer l\'essai' : 'Lancer l\'essai';
   $('calMeasure').hidden = cal.state !== 'measure';
   $('calNote').textContent = (cal.state === 'run' && !link) ? 'Capteur non connecté : tu pourras saisir les tours à la main.' : '';
+  updateTest();
+}
+
+function pad2(n) { return (n < 10 ? '0' : '') + n; }
+function updateTest() {
+  var p = P(), now = Date.now(), on = !!link;
+  $('tDot').className = 'dot' + (on ? ' on' : '');
+  $('tLink').textContent = !on ? 'Non connecté' : (link.mode === 'sim' ? 'Simulation' : 'Connecté en Bluetooth');
+  $('tConnect').textContent = on ? 'Déconnecter' : 'Connecter le capteur';
+  $('tAge').textContent = diag.packets ? ('il y a ' + Math.round((now - diag.lastAt) / 1000) + ' s') : '—';
+  $('tPk').textContent = diag.packets;
+  $('tRaw').textContent = diag.count === null ? '—' : diag.count;
+  $('tEp').textContent = diag.epoch === null ? '—' : '#' + diag.epoch.toString(16).toUpperCase();
+  var lv = $('tLinkV');
+  if (!on) { lv.textContent = 'Appuie sur « Connecter le capteur » (boîtier allumé, à portée).'; lv.className = 'verdict'; }
+  else if (!diag.packets) { lv.textContent = 'Connecté, en attente du premier paquet…'; lv.className = 'verdict'; }
+  else { lv.textContent = '✓ Liaison OK : les données arrivent.'; lv.className = 'verdict ok'; }
+
+  var tot = T.pos + T.neg, hit = now - T.flashAt < 400;
+  $('tCnt').textContent = tot; $('tCnt').className = hit ? 'hit' : '';
+  var sv = $('tSensV');
+  if (tot) { sv.textContent = '✓ Capteur OK : ' + tot + ' impulsion(s) détectée(s).'; sv.className = 'verdict ok'; }
+  else { sv.textContent = on ? 'En attente d\'une impulsion…' : ''; sv.className = 'verdict'; }
+
+  $('tPos').textContent = T.pos; $('tNeg').textContent = T.neg;
+  var net = (T.pos - T.neg) * (p.invert ? -1 : 1), dv = $('tDirV'), inv = $('tInvert');
+  inv.hidden = true;
+  if (!tot) { dv.textContent = ''; dv.className = 'verdict'; }
+  else if (net > 0) { dv.textContent = '✓ Sens filage reconnu (la longueur augmente).'; dv.className = 'verdict ok'; }
+  else if (net < 0) { dv.textContent = 'Sens inversé : la longueur diminue au filage.'; dv.className = 'verdict ko'; inv.hidden = false; }
+  else { dv.textContent = 'Aucun mouvement net.'; dv.className = 'verdict'; }
+
+  var cnt = pr.pos - pr.neg; $('tPprCnt').textContent = Math.abs(cnt);
+  var pv = $('tPprV'), use = $('tPprUse');
+  $('tPprStart').textContent = pr.state === 'run' ? 'Terminer la mesure' : 'Démarrer la mesure';
+  use.hidden = true;
+  if (pr.state === 'run') { pv.textContent = 'Mesure en cours : tourne maintenant.'; pv.className = 'verdict'; }
+  else if (pr.result) {
+    var r = pr.result, near = Math.abs(r.per - Math.round(r.per)) < 0.15;
+    pv.textContent = r.imp + ' impulsion(s) en ' + fmt(r.n, 0) + ' tour(s) = ' + fmt(r.per, 2) + ' par tour' + (near ? '.' : ' : valeur non entière, recommence plus proprement.');
+    pv.className = 'verdict' + (near ? ' ok' : ' ko');
+    if (near && Math.round(r.per) >= 1) { use.hidden = false; use.textContent = 'Utiliser ' + Math.round(r.per) + ' impulsion(s) par tour'; }
+  } else { pv.textContent = ''; pv.className = 'verdict'; }
+
+  $('tLog').textContent = diag.log.length ? diag.log.map(function (e) {
+    var t = new Date(e.t);
+    return pad2(t.getHours()) + ':' + pad2(t.getMinutes()) + ':' + pad2(t.getSeconds()) + '  total ' + e.count + '  Δ ' + (e.d > 0 ? '+' : '') + e.d + '  #' + e.epoch.toString(16).toUpperCase();
+  }).join('\n') : 'Aucun paquet reçu.';
 }
 
 function loadInputs() {
@@ -492,10 +627,34 @@ $('manSave').addEventListener('click', function () {
   var p = P(); p.runs = []; p.mPerTurn = v; $('manMpt').value = ''; save(); update(); toast('Coefficient : ' + fmt(v, 3) + ' m/tour.');
 });
 
+$('tConnect').addEventListener('click', toggleLink);
+$('tSim').addEventListener('click', startSim);
+$('tSimOut').addEventListener('click', function () { if (sim) sim.dir = 1; });
+$('tSimIn').addEventListener('click', function () { if (sim) sim.dir = -1; });
+$('tSimStop').addEventListener('click', function () { if (sim) sim.dir = 0; });
+$('tReset').addEventListener('click', function () { T.pos = 0; T.neg = 0; updateTest(); });
+$('tInvert').addEventListener('click', function () { var p = P(); p.invert = !p.invert; $('pInvert').checked = p.invert; save(); update(); toast('Sens de comptage inversé.'); });
+$('tPprStart').addEventListener('click', function () {
+  if (pr.state === 'idle') {
+    var n = num($('tPprN'));
+    if (!(n > 0)) { toast('Nombre de tours invalide.'); return; }
+    pr.n = n; pr.pos = 0; pr.neg = 0; pr.result = null; pr.state = 'run';
+  } else {
+    var imp = Math.abs(pr.pos - pr.neg); pr.state = 'idle';
+    pr.result = imp > 0 ? { imp: imp, n: pr.n, per: imp / pr.n } : null;
+    if (!pr.result) toast('Aucune impulsion reçue pendant la mesure.');
+  }
+  update();
+});
+$('tPprUse').addEventListener('click', function () {
+  var p = P(), v = Math.round(pr.result.per);
+  p.ppr = v; $('pPpr').value = v; save(); update(); toast('Impulsions par tour : ' + v + '.');
+});
+
 Array.prototype.forEach.call(document.querySelectorAll('nav button'), function (b) {
   b.addEventListener('click', function () {
     Array.prototype.forEach.call(document.querySelectorAll('nav button'), function (x) { x.classList.toggle('on', x === b); });
-    ['v-count', 'v-calib', 'v-set'].forEach(function (id) { $(id).hidden = id !== b.getAttribute('data-v'); });
+    ['v-count', 'v-test', 'v-calib', 'v-set'].forEach(function (id) { $(id).hidden = id !== b.getAttribute('data-v'); });
     window.scrollTo(0, 0);
   });
 });
